@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -15,8 +16,15 @@ public sealed class ExtractIsdocFunction(IsdocAttachmentExtractor extractor, ILo
 
     [Function(nameof(ExtractIsdocFunction))]
     public async Task<HttpResponseData> Run(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "extract-isdoc")] HttpRequestData request)
+        [HttpTrigger(AuthorizationLevel.Function, "post", "options", Route = "extract-isdoc")] HttpRequestData request)
     {
+        if (HttpMethods.IsOptions(request.Method))
+        {
+            var optionsResponse = request.CreateResponse(HttpStatusCode.NoContent);
+            AddCorsHeaders(optionsResponse);
+            return optionsResponse;
+        }
+
         byte[] pdfContent;
 
         try
@@ -40,6 +48,7 @@ public sealed class ExtractIsdocFunction(IsdocAttachmentExtractor extractor, ILo
 
             var response = request.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/xml; charset=utf-8");
+            AddCorsHeaders(response);
             await response.WriteStringAsync(xml);
             return response;
         }
@@ -112,7 +121,15 @@ public sealed class ExtractIsdocFunction(IsdocAttachmentExtractor extractor, ILo
         string message)
     {
         var response = request.CreateResponse(statusCode);
+        AddCorsHeaders(response);
         await response.WriteStringAsync(message);
         return response;
+    }
+
+    private static void AddCorsHeaders(HttpResponseData response)
+    {
+        response.Headers.Add("Access-Control-Allow-Origin", "*");
+        response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+        response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, x-functions-key");
     }
 }
